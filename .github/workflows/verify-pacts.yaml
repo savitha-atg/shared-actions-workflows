@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # Run common setup for pact testing
-      - name: Pact testing setup1
+      - name: Pact testing setup
         uses: savitha-atg/shared-actions-workflows/.github/actions/pact-testing/setup@main
         with:
           workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
