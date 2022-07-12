@@ -1,0 +1,34 @@
+name: Verify pacts
+
+on:
+  workflow_call:
+
+jobs:
+  verify-pacts:
+    runs-on: ubuntu-latest
+    steps:
+      # Run common setup for pact testing
+      - name: Pact testing setup1
+        uses: savitha-atg/shared-actions-workflows/.github/actions/pact-testing/setup@main
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          gh_actions_oidc_sa: ${{ secrets.GH_ACTIONS_OIDC_SA }}
+          mvn_settings_file_contents: ${{ secrets.MAVEN_SETTINGS_FILE }}
+
+      # Run tests, which will verify the published pacts (if any) and publish the verification results
+      - uses: actions/checkout@v3
+      - name: Run tests
+        env:
+          PACT_BROKER_BASE_URL: https://atg.pactflow.io
+          PACT_BROKER_TOKEN: ${{ secrets.ATG_PACT_FLOW_TOKEN }}
+          FLYWAY_LICENSE_KEY: ${{ secrets.FLYWAY_LICENSE_KEY }}
+          GIT_REF: ${{ github.ref }}
+        run: |-
+          ${MVN_CMD} -B verify \
+              -DbranchEnvironment=${PACT_TAG} \
+              -DpactBrokerUrl=${PACT_BROKER_BASE_URL} \
+              -DpactBrokerToken=${PACT_BROKER_TOKEN} \
+              -DpactPublishVerifyResults=true \
+              -DpactProviderTag=${PACT_TAG} \
+              -DpactProviderBranch=${GIT_REF:11} \
+              -DpactProviderVersion=${VERSION}

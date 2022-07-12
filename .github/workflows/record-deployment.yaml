@@ -1,0 +1,33 @@
+name: Record deployment
+
+on:
+  workflow_call:
+    inputs:
+      pacticipant:
+        required: true
+        type: string
+
+jobs:
+  record-deployment:
+    runs-on: ubuntu-latest
+    steps:
+      # Run common setup for pact testing
+      - name: Pact testing setup
+        uses: savitha-atg/shared-actions-workflows/.github/actions/pact-testing/setup@main
+        with:
+          workload_identity_provider: ${{ secrets.WORKLOAD_IDENTITY_PROVIDER }}
+          gh_actions_oidc_sa: ${{ secrets.GH_ACTIONS_OIDC_SA }}
+          mvn_settings_file_contents: ${{ secrets.MAVEN_SETTINGS_FILE }}
+      
+      # Deploy the app and record it
+      - uses: actions/checkout@v3
+      - name: Deploy
+        env:
+          PACT_BROKER_BASE_URL: https://atg.pactflow.io
+          PACT_BROKER_TOKEN: ${{ secrets.ATG_PACT_FLOW_TOKEN }}
+          PACTICIPANT: ${{ inputs.pacticipant }}
+        run: |-
+          ${PACT_CMD} -v ${PWD}:${PWD} pactfoundation/pact-cli broker record-deployment \
+            --pacticipant ${PACTICIPANT} \
+            --version ${VERSION} \
+            --environment ${PACT_ENV}

@@ -1,0 +1,85 @@
+name: setup
+description: Common setup for pact testing
+
+inputs:
+  workload_identity_provider:
+    description: 'Workload identity provider granting google cloud access tokens'
+    required: true
+  gh_actions_oidc_sa:
+    description: 'Service account that has permissions to google cloud resources required by GitHub actions'
+    required: true
+  mvn_settings_file_contents:
+    description: 'The contents of the maven settings.xml file'
+    required: true
+
+runs:
+  using: composite
+
+  steps:
+    # Authenticate to GCloud using workload identity federation
+    - id: auth
+      name: Authenticate to Google Cloud
+      uses: google-github-actions/auth@v0.4.0
+      with:
+        token_format: access_token
+        workload_identity_provider: ${{ inputs.workload_identity_provider }}
+        service_account: ${{ inputs.gh_actions_oidc_sa }}
+    
+    # Cache Maven packages to expedite the build
+    - name: Cache Maven packages
+      uses: actions/cache@v1
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+    
+    # Set up JDK 11
+    - name: Set up JDK 11
+      uses: actions/setup-java@v1
+      with:
+        java-version: 11
+
+    # Set common environment variables
+    - name: Sets default env vars
+      shell: bash
+      env:
+        GITHUB_REF: ${{ github.ref }}
+        MVN_SETTINGS_FILE_CONTENTS: ${{ inputs.mvn_settings_file_contents }}
+      run: |-
+        MVN_SETTINGS_FILE=/tmp/settings.xml
+        echo ${MVN_SETTINGS_FILE_CONTENTS} > /tmp/settings.xml
+        
+        MVN_CMD="mvn --quiet --no-transfer-progress -s ${MVN_SETTINGS_FILE}"
+        echo "MVN_CMD=${MVN_CMD}" >> ${GITHUB_ENV}
+        
+        echo "PACT_CMD=docker run --rm -e PACT_BROKER_BASE_URL -e PACT_BROKER_TOKEN" >> ${GITHUB_ENV}
+        
+        VERSION=$(${MVN_CMD} help:evaluate -Dexpression=project.version -q -DforceStdout)
+        echo "VERSION=${VERSION}" >> ${GITHUB_ENV}
+
+        case ${GITHUB_REF} in
+          refs/heads/develop)
+            echo "PACT_TAG=dev" >> ${GITHUB_ENV}
+            echo "PACT_ENV=${PACT_TAG}" >> ${GITHUB_ENV}
+          ;;
+
+          refs/heads/release/*)
+            echo "PACT_TAG=stage" >> ${GITHUB_ENV}
+            echo "PACT_ENV=${PACT_TAG}" >> ${GITHUB_ENV}
+          ;;
+
+          refs/heads/main)
+            echo "PACT_TAG=prod" >> ${GITHUB_ENV}
+            echo "PACT_ENV=${PACT_TAG}" >> ${GITHUB_ENV}        
+          ;;
+        
+          *)
+            echo "PACT_TAG=${GIT_REF:11}" >> ${GITHUB_ENV}
+            echo "PACT_ENV=dev" >> ${GITHUB_ENV}
+          ;;
+        esac
+    
+    # Pull latest pact-cli image
+    - name: Pull latest pact-cli image
+      shell: bash
+      run: docker pull pactfoundation/pact-cli:latest
