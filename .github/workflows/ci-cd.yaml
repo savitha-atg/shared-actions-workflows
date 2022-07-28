@@ -1,0 +1,46 @@
+name: CI/CD
+
+on:
+  push:
+  release:
+    types:
+      - released
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: build-and-test-${{ github.ref }}
+      cancel-in-progress: true
+    steps:
+      - run: echo "Build and test"
+      
+  dev-deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: dev-deploy
+    needs:
+      - build-and-test
+    environment: dev
+    steps:
+      - run: echo "Dev deploy"
+  
+  stage-deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: stage-deploy
+    needs:
+      - dev-deploy
+    environment: stage
+    steps:
+      - run: echo "Stage deploy"
+
+  prod-deploy:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: prod-deploy
+    needs:
+      - stage-deploy
+    environment: prod
+    steps:
+      - run: echo "Prod deploy"
